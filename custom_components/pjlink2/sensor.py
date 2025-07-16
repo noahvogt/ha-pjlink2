@@ -11,10 +11,11 @@ from aiopjlink import PJLink, PJLinkException, PJLinkProjectorError, Power, Sour
 from homeassistant import config_entries, core
 from homeassistant.components.sensor import PLATFORM_SCHEMA
 from homeassistant.const import CONF_HOST, CONF_PORT, CONF_NAME, CONF_PASSWORD, CONF_TIMEOUT
+from homeassistant.core import HomeAssistant as HomeAssistantType
 
 import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers.entity import Entity
-from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType, HomeAssistantType
+from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 
 import voluptuous as vol
 
