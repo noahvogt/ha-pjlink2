@@ -194,9 +194,16 @@ class PJLink2MediaPlayer(MediaPlayerEntity):
                 try:
                     current = await Sources(self._projector).get()
                     if isinstance(current, (tuple, list)):
-                        raw_source = "".join(map(str, current))
+                        src_type = (
+                            current[0].value
+                            if hasattr(current[0], "value")
+                            else current[0]
+                        )
+                        src_index = current[1]
+                        raw_source = f"{src_type}{src_index}"
                     else:
                         raw_source = str(current)
+
                     self._current_source = self._source_mapping.get(
                         raw_source, raw_source
                     )
