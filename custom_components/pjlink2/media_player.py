@@ -108,7 +108,7 @@ class PJLink2MediaPlayer(MediaPlayerEntity):
         MediaPlayerEntityFeature.TURN_ON
         | MediaPlayerEntityFeature.TURN_OFF
         | MediaPlayerEntityFeature.SELECT_SOURCE
-        | MediaPlayerEntityFeature.MUTE_VOLUME
+        | MediaPlayerEntityFeature.VOLUME_MUTE
     )
 
     def __init__(self, pjl, name, sources):
