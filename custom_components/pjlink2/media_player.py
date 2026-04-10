@@ -79,6 +79,9 @@ async def async_setup_platform(
     async_add_entities: Callable,
     discovery_info: DiscoveryInfoType | None = None,
 ) -> None:
+    _LOGGER.debug("Setting up PJLink2 platform")
+    platform = entity_platform.async_get_current_platform()
+
     host = config.get(CONF_HOST)
     port = config.get(CONF_PORT)
     password = config.get(CONF_PASSWORD)
@@ -89,14 +92,14 @@ async def async_setup_platform(
     devices = [PJLink2MediaPlayer(pjl, name, sources)]
     async_add_entities(devices, update_before_add=False)
 
-    platform = entity_platform.async_get_current_platform()
-    platform.async_register_entity_service(
-        "freeze",
-        {
-            vol.Required("freeze"): cv.boolean,
-        },
-        "async_freeze",
-    )
+    if platform:
+        platform.async_register_entity_service(
+            "freeze",
+            {
+                vol.Required("freeze"): cv.boolean,
+            },
+            "async_freeze",
+        )
 
 
 class PJLink2MediaPlayer(MediaPlayerEntity):
