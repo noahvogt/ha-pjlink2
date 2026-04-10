@@ -3,6 +3,7 @@ from enum import StrEnum
 
 DOMAIN = "pjlink2"
 
+CONF_SOURCES = "sources"
 CONF_ENCODING = "encoding"
 DEFAULT_ENCODING = "utf-8"
 DEFAULT_PORT = 4352

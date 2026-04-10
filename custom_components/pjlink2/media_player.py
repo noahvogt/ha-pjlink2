@@ -40,6 +40,7 @@ import voluptuous as vol
 
 from .const import (
     DOMAIN,
+    CONF_SOURCES,
     CONF_ENCODING,
     DEFAULT_ENCODING,
     DEFAULT_PORT,
@@ -61,6 +62,7 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
         vol.Required(CONF_HOST): cv.string,
         vol.Optional(CONF_PORT, default=DEFAULT_PORT): cv.port,
         vol.Optional(CONF_NAME): cv.string,
+        vol.Optional(CONF_SOURCES): vol.Schema({cv.string: cv.string}),
         vol.Optional(CONF_ENCODING, default=DEFAULT_ENCODING): cv.string,
         vol.Optional(CONF_PASSWORD): cv.string,
         vol.Optional(CONF_TIMEOUT, default=DEFAULT_TIMEOUT): cv.positive_float,
@@ -79,8 +81,9 @@ async def async_setup_platform(
     password = config.get(CONF_PASSWORD)
     timeout = config.get(CONF_TIMEOUT)
     name = config.get(CONF_NAME)
+    sources = config.get(CONF_SOURCES)
     pjl = PJLink(host, port, password, timeout)
-    devices = [PJLink2MediaPlayer(pjl, name)]
+    devices = [PJLink2MediaPlayer(pjl, name, sources)]
     async_add_entities(devices, update_before_add=False)
 
 
@@ -92,7 +95,7 @@ class PJLink2MediaPlayer(MediaPlayerEntity):
         | MediaPlayerEntityFeature.SELECT_SOURCE
     )
 
-    def __init__(self, pjl, name):
+    def __init__(self, pjl, name, sources):
         super().__init__()
         self._projector = pjl
         self.attrs: dict[str, Any] = {}
@@ -106,14 +109,18 @@ class PJLink2MediaPlayer(MediaPlayerEntity):
         self._connectionErrorLogged = False
         self._current_source = None
 
-        self._source_mapping = {
-            "31": "HDMI 1",
-            "32": "HDMI 2",
-            "33": "HDMI 3",
-            "11": "Computer 1",
-        }
-        self._reverse_mapping = {v: k for k, v in self._source_mapping.items()}
-        self._source_list = list(self._source_mapping.values())
+        if sources:
+            self._source_mapping = sources
+            self._source_list = list(self._source_mapping.values())
+            self._reverse_mapping = {
+                v: k for k, v in self._source_mapping.items()
+            }
+            self._dynamic_sources = False
+        else:
+            self._source_mapping = {}
+            self._source_list = []
+            self._reverse_mapping = {}
+            self._dynamic_sources = True
 
     async def async_will_remove_from_hass(self) -> None:
         await super().async_will_remove_from_hass()
@@ -203,6 +210,12 @@ class PJLink2MediaPlayer(MediaPlayerEntity):
                         raw_source = f"{src_type}{src_index}"
                     else:
                         raw_source = str(current)
+
+                    if (
+                        self._dynamic_sources
+                        and raw_source not in self._source_list
+                    ):
+                        self._source_list.append(raw_source)
 
                     self._current_source = self._source_mapping.get(
                         raw_source, raw_source
