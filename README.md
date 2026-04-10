@@ -15,7 +15,7 @@ The component has been developed and tested with an Epson LS12000 projector, but
 
 1. In HACS, select `Integrations`
 2. Select `Custom Repositories` from the three dots in top right corner
-3. Enter `https://github.com/TheRealKillaruna/ha-pjlink2` as repository and select `Integration` as category
+3. Enter `https://github.com/noahvogt/ha-pjlink2` as repository and select `Integration` as category
 4. Click `Add`
 5. Open `Custom Repositories` again and you should see `PJLink2` at the top of the list, click it
 6. Click `Download` in lower right corner
@@ -25,7 +25,7 @@ The component has been developed and tested with an Epson LS12000 projector, but
 
 **Manually**
 
-1. Copy `pjlink2` folder from [latest release](https://github.com/TheRealKillaruna/pjlink2/releases/latest) to `custom_components` folder in your config folder.
+1. Copy `pjlink2` folder from [latest release](https://github.com/noahvogt/pjlink2/releases/latest) to `custom_components` folder in your config folder.
 2. Configure your settings as described below
 3. Restart Home Assistant
 

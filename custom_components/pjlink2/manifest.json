@@ -1,8 +1,8 @@
 {
-  "codeowners": ["@TheRealKillaruna"],
+  "codeowners": ["@noahvogt"],
   "config_flow": false,
   "dependencies": [],
-  "documentation": "https://github.com/TheRealKillaruna/ha-pjlink2",
+  "documentation": "https://github.com/noahvogt/ha-pjlink2",
   "domain": "pjlink2",
   "iot_class": "calculated",
   "name": "PJLink2",
