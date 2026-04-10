@@ -176,11 +176,13 @@ class PJLink2MediaPlayer(MediaPlayerEntity):
                 await self._projector.__aenter__()
                 self._available = True
                 info = await Information(self._projector).table()
-                self.attrs[ATTR_PRODUCT_NAME] = info["product_name"]
-                self.attrs[ATTR_MANUFACTURER_NAME] = info["manufacturer_name"]
-                self.attrs[ATTR_PROJECTOR_NAME] = info["projector_name"]
-                if self._name == None:
-                    self._name = info["projector_name"]
+                self.attrs[ATTR_PRODUCT_NAME] = info.get("product_name")
+                self.attrs[ATTR_MANUFACTURER_NAME] = info.get(
+                    "manufacturer_name"
+                )
+                self.attrs[ATTR_PROJECTOR_NAME] = info.get("projector_name")
+                if self._name is None:
+                    self._name = info.get("projector_name")
 
             pwr = await Power(self._projector).get()
             if pwr == Power.State.OFF:
@@ -188,24 +190,36 @@ class PJLink2MediaPlayer(MediaPlayerEntity):
             elif pwr == Power.State.ON:
                 self._state = MediaPlayerState.ON
             elif pwr in (Power.State.COOLING, Power.State.WARMING):
-                self._state = (
-                    MediaPlayerState.ON
-                )  # Keeps UI active during transition
+                self._state = MediaPlayerState.ON
 
             if pwr == Power.ON:
-                res = await Sources(self._projector).resolution()
-                self.attrs[ATTR_RESOLUTION_X] = res[0]
-                self.attrs[ATTR_RESOLUTION_Y] = res[1]
-                self.attrs[ATTR_LAMP_HOURS] = await Lamp(
-                    self._projector
-                ).hours()
+                # 1. Fetch current source FIRST (This rarely fails, even without a signal)
+                try:
+                    current = await Sources(self._projector).get()
+                    if isinstance(current, (tuple, list)):
+                        self._current_source = "".join(map(str, current))
+                    else:
+                        self._current_source = str(current)
+                except PJLinkProjectorError:
+                    pass  # Keep previous source state if it's temporarily unavailable
 
-                # Fetch current source
-                current = await Sources(self._projector).get()
-                if isinstance(current, (tuple, list)):
-                    self._current_source = "".join(map(str, current))
-                else:
-                    self._current_source = str(current)
+                # 2. Fetch Lamp Hours
+                try:
+                    self.attrs[ATTR_LAMP_HOURS] = await Lamp(
+                        self._projector
+                    ).hours()
+                except PJLinkProjectorError:
+                    pass
+
+                # 3. Fetch Resolution (This frequently fails if there is no active video signal)
+                try:
+                    res = await Sources(self._projector).resolution()
+                    self.attrs[ATTR_RESOLUTION_X] = res[0]
+                    self.attrs[ATTR_RESOLUTION_Y] = res[1]
+                except PJLinkProjectorError:
+                    self.attrs.pop(ATTR_RESOLUTION_X, None)
+                    self.attrs.pop(ATTR_RESOLUTION_Y, None)
+
             else:
                 self.attrs.pop(ATTR_RESOLUTION_X, None)
                 self.attrs.pop(ATTR_RESOLUTION_Y, None)
@@ -213,9 +227,6 @@ class PJLink2MediaPlayer(MediaPlayerEntity):
 
             self._connectionErrorLogged = False
 
-        except PJLinkProjectorError:
-            self.attrs.pop(ATTR_RESOLUTION_X, None)
-            self.attrs.pop(ATTR_RESOLUTION_Y, None)
         except (PJLinkException, OSError) as err:
             if not self._connectionErrorLogged:
                 _LOGGER.error("PJLink2 ERROR for %s: %s", self._name, repr(err))
