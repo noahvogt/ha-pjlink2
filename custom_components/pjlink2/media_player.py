@@ -193,30 +193,30 @@ class PJLink2MediaPlayer(MediaPlayerEntity):
                 self._state = MediaPlayerState.ON
 
             if pwr == Power.ON:
-                # 1. Fetch current source FIRST (This rarely fails, even without a signal)
+                # 1. Fetch current source
                 try:
                     current = await Sources(self._projector).get()
                     if isinstance(current, (tuple, list)):
                         self._current_source = "".join(map(str, current))
                     else:
                         self._current_source = str(current)
-                except PJLinkProjectorError:
-                    pass  # Keep previous source state if it's temporarily unavailable
+                except PJLinkException:
+                    pass  # Keep previous state if temporarily unavailable
 
                 # 2. Fetch Lamp Hours
                 try:
                     self.attrs[ATTR_LAMP_HOURS] = await Lamp(
                         self._projector
                     ).hours()
-                except PJLinkProjectorError:
+                except PJLinkException:
                     pass
 
-                # 3. Fetch Resolution (This frequently fails if there is no active video signal)
+                # 3. Fetch Resolution
                 try:
                     res = await Sources(self._projector).resolution()
                     self.attrs[ATTR_RESOLUTION_X] = res[0]
                     self.attrs[ATTR_RESOLUTION_Y] = res[1]
-                except PJLinkProjectorError:
+                except PJLinkException:
                     self.attrs.pop(ATTR_RESOLUTION_X, None)
                     self.attrs.pop(ATTR_RESOLUTION_Y, None)
 
@@ -228,13 +228,20 @@ class PJLink2MediaPlayer(MediaPlayerEntity):
             self._connectionErrorLogged = False
 
         except (PJLinkException, OSError) as err:
-            if not self._connectionErrorLogged:
-                _LOGGER.error("PJLink2 ERROR for %s: %s", self._name, repr(err))
-                self._connectionErrorLogged = True
-            self._state = MediaPlayerState.OFF
-            if self._available:
-                self._available = False
-                try:
-                    await self._projector.__aexit__(0, 0, 0)
-                except Exception:
-                    pass
+            err_str = repr(err)
+            # If the projector is just busy switching inputs/states, ignore and wait for next poll
+            if "ERR3" in err_str or "unavailable" in err_str:
+                pass
+            else:
+                if not self._connectionErrorLogged:
+                    _LOGGER.error(
+                        "PJLink2 ERROR for %s: %s", self._name, err_str
+                    )
+                    self._connectionErrorLogged = True
+                self._state = MediaPlayerState.OFF
+                if self._available:
+                    self._available = False
+                    try:
+                        await self._projector.__aexit__(0, 0, 0)
+                    except Exception:
+                        pass
