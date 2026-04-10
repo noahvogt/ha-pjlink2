@@ -1,4 +1,5 @@
 """PJLink2 media_player platform."""
+
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -6,16 +7,30 @@ from datetime import timedelta
 import logging
 from typing import Any
 
-from aiopjlink import PJLink, PJLinkException, PJLinkProjectorError, Power, Sources, Lamp, Information 
+from aiopjlink import (
+    PJLink,
+    PJLinkException,
+    PJLinkProjectorError,
+    Power,
+    Sources,
+    Lamp,
+    Information,
+)
 
 from homeassistant import config_entries, core
 from homeassistant.components.media_player import (
     MediaPlayerEntity,
     MediaPlayerEntityFeature,
     MediaPlayerState,
-    PLATFORM_SCHEMA
+    PLATFORM_SCHEMA,
 )
-from homeassistant.const import CONF_HOST, CONF_PORT, CONF_NAME, CONF_PASSWORD, CONF_TIMEOUT
+from homeassistant.const import (
+    CONF_HOST,
+    CONF_PORT,
+    CONF_NAME,
+    CONF_PASSWORD,
+    CONF_TIMEOUT,
+)
 from homeassistant.core import HomeAssistant as HomeAssistantType
 
 import homeassistant.helpers.config_validation as cv
@@ -23,7 +38,20 @@ from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 
 import voluptuous as vol
 
-from .const import DOMAIN, CONF_ENCODING, DEFAULT_ENCODING, DEFAULT_PORT, DEFAULT_TIMEOUT, ATTR_PRODUCT_NAME, ATTR_MANUFACTURER_NAME, ATTR_PROJECTOR_NAME, ATTR_RESOLUTION_X, ATTR_RESOLUTION_Y, ATTR_LAMP_HOURS, ProjectorState
+from .const import (
+    DOMAIN,
+    CONF_ENCODING,
+    DEFAULT_ENCODING,
+    DEFAULT_PORT,
+    DEFAULT_TIMEOUT,
+    ATTR_PRODUCT_NAME,
+    ATTR_MANUFACTURER_NAME,
+    ATTR_PROJECTOR_NAME,
+    ATTR_RESOLUTION_X,
+    ATTR_RESOLUTION_Y,
+    ATTR_LAMP_HOURS,
+    ProjectorState,
+)
 
 _LOGGER = logging.getLogger(__name__)
 # Time between updating data from projector
@@ -35,10 +63,11 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
         vol.Optional(CONF_PORT, default=DEFAULT_PORT): cv.port,
         vol.Optional(CONF_NAME): cv.string,
         vol.Optional(CONF_ENCODING, default=DEFAULT_ENCODING): cv.string,
-        vol.Optional(CONF_PASSWORD) : cv.string,
-        vol.Optional(CONF_TIMEOUT, default=DEFAULT_TIMEOUT) : cv.positive_float
+        vol.Optional(CONF_PASSWORD): cv.string,
+        vol.Optional(CONF_TIMEOUT, default=DEFAULT_TIMEOUT): cv.positive_float,
     }
 )
+
 
 async def async_setup_platform(
     hass: HomeAssistantType,
@@ -48,7 +77,7 @@ async def async_setup_platform(
 ) -> None:
     """Set up the media_player platform."""
     host = config.get(CONF_HOST)
-    port =  config.get(CONF_PORT)
+    port = config.get(CONF_PORT)
     password = config.get(CONF_PASSWORD)
     timeout = config.get(CONF_TIMEOUT)
     name = config.get(CONF_NAME)
@@ -75,19 +104,21 @@ class PJLink2MediaPlayer(MediaPlayerEntity):
         self._available = False
         self._connectionErrorLogged = False
         self._current_source = None
-        
+
         # PJLink standard inputs. You can modify these to friendly names later.
         # Format is typically "31" for HDMI1, "32" for HDMI2, etc.
-        self._source_list = ["11", "12", "21", "22", "31", "32", "33"] 
+        self._source_list = ["11", "12", "21", "22", "31", "32", "33"]
 
     async def async_will_remove_from_hass(self) -> None:
         """Close connection."""
         await super().async_will_remove_from_hass()
         if self._available:
             try:
-                await self._projector.__aexit__(0,0,0)
+                await self._projector.__aexit__(0, 0, 0)
             except (PJLinkException, OSError) as err:
-                _LOGGER.error("PJLink2 ERROR when closing connection: %s", repr(err))
+                _LOGGER.error(
+                    "PJLink2 ERROR when closing connection: %s", repr(err)
+                )
 
     @property
     def name(self) -> str:
@@ -132,7 +163,10 @@ class PJLink2MediaPlayer(MediaPlayerEntity):
 
     async def async_select_source(self, source: str) -> None:
         """Select input source."""
-        await Sources(self._projector).set(source)
+        source_type = source[0]
+        source_index = source[1]
+
+        await Sources(self._projector).set(source_type, source_index)
         self._current_source = source
 
     async def async_update(self) -> None:
@@ -145,39 +179,51 @@ class PJLink2MediaPlayer(MediaPlayerEntity):
                 self.attrs[ATTR_PRODUCT_NAME] = info["product_name"]
                 self.attrs[ATTR_MANUFACTURER_NAME] = info["manufacturer_name"]
                 self.attrs[ATTR_PROJECTOR_NAME] = info["projector_name"]
-                if self._name == None: self._name = info["projector_name"]
-                
+                if self._name == None:
+                    self._name = info["projector_name"]
+
             pwr = await Power(self._projector).get()
-            if pwr == Power.State.OFF: self._state = MediaPlayerState.OFF
-            elif pwr == Power.State.ON: self._state = MediaPlayerState.ON
-            elif pwr in (Power.State.COOLING, Power.State.WARMING): self._state = MediaPlayerState.ON # Keeps UI active during transition
-            
+            if pwr == Power.State.OFF:
+                self._state = MediaPlayerState.OFF
+            elif pwr == Power.State.ON:
+                self._state = MediaPlayerState.ON
+            elif pwr in (Power.State.COOLING, Power.State.WARMING):
+                self._state = (
+                    MediaPlayerState.ON
+                )  # Keeps UI active during transition
+
             if pwr == Power.ON:
                 res = await Sources(self._projector).resolution()
                 self.attrs[ATTR_RESOLUTION_X] = res[0]
                 self.attrs[ATTR_RESOLUTION_Y] = res[1]
-                self.attrs[ATTR_LAMP_HOURS] = await Lamp(self._projector).hours()
-                
+                self.attrs[ATTR_LAMP_HOURS] = await Lamp(
+                    self._projector
+                ).hours()
+
                 # Fetch current source
-                self._current_source = await Sources(self._projector).get()
+                current = await Sources(self._projector).get()
+                if isinstance(current, (tuple, list)):
+                    self._current_source = "".join(map(str, current))
+                else:
+                    self._current_source = str(current)
             else:
                 self.attrs.pop(ATTR_RESOLUTION_X, None)
                 self.attrs.pop(ATTR_RESOLUTION_Y, None)
                 self._current_source = None
-                
-            self._connectionErrorLogged = False 
-        
+
+            self._connectionErrorLogged = False
+
         except PJLinkProjectorError:
             self.attrs.pop(ATTR_RESOLUTION_X, None)
             self.attrs.pop(ATTR_RESOLUTION_Y, None)
         except (PJLinkException, OSError) as err:
-            if not self._connectionErrorLogged: 
+            if not self._connectionErrorLogged:
                 _LOGGER.error("PJLink2 ERROR for %s: %s", self._name, repr(err))
                 self._connectionErrorLogged = True
             self._state = MediaPlayerState.OFF
             if self._available:
                 self._available = False
                 try:
-                    await self._projector.__aexit__(0,0,0)
+                    await self._projector.__aexit__(0, 0, 0)
                 except Exception:
                     pass

@@ -36,7 +36,7 @@ All settings are specified in your Home Assistant configuration via [YAML](https
 Add your projector as a sensor and configure like this:
 
 ```yaml
-sensor:
+media_player:
   - platform: pjlink2
     host: 192.168.0.123       # IP address of the projector
     port: 1234                # projector port for communication (optional, default is 4352)
