@@ -54,7 +54,6 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
-# Time between updating data from projector
 SCAN_INTERVAL = timedelta(seconds=3)
 
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
@@ -105,9 +104,16 @@ class PJLink2MediaPlayer(MediaPlayerEntity):
         self._connectionErrorLogged = False
         self._current_source = None
 
-        # PJLink standard inputs. You can modify these to friendly names later.
-        # Format is typically "31" for HDMI1, "32" for HDMI2, etc.
-        self._source_list = ["11", "12", "21", "22", "31", "32", "33"]
+        # --- FRIENDLY NAMES MAPPING ---
+        # Change these values to whatever you want them to be called in Home Assistant
+        self._source_mapping = {
+            "31": "HDMI 1",
+            "32": "HDMI 2",
+            "33": "HDMI 3",
+            "11": "Computer 1",
+        }
+        self._reverse_mapping = {v: k for k, v in self._source_mapping.items()}
+        self._source_list = list(self._source_mapping.values())
 
     async def async_will_remove_from_hass(self) -> None:
         """Close connection."""
@@ -115,10 +121,8 @@ class PJLink2MediaPlayer(MediaPlayerEntity):
         if self._available:
             try:
                 await self._projector.__aexit__(0, 0, 0)
-            except (PJLinkException, OSError) as err:
-                _LOGGER.error(
-                    "PJLink2 ERROR when closing connection: %s", repr(err)
-                )
+            except Exception:
+                pass
 
     @property
     def name(self) -> str:
@@ -138,33 +142,30 @@ class PJLink2MediaPlayer(MediaPlayerEntity):
 
     @property
     def source(self) -> str | None:
-        """Name of the current input source."""
         return self._current_source
 
     @property
     def source_list(self) -> list[str]:
-        """List of available input sources."""
         return self._source_list
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return the custom PJLink2 attributes."""
         return self.attrs
 
     async def async_turn_on(self) -> None:
-        """Turn the projector on."""
         await Power(self._projector).set(Power.ON)
         self._state = MediaPlayerState.ON
 
     async def async_turn_off(self) -> None:
-        """Turn the projector off."""
         await Power(self._projector).set(Power.OFF)
         self._state = MediaPlayerState.OFF
 
     async def async_select_source(self, source: str) -> None:
         """Select input source."""
-        source_type = source[0]
-        source_index = source[1]
+        # Convert friendly name (e.g. "HDMI 1") back to raw PJLink code (e.g. "31")
+        raw_source = self._reverse_mapping.get(source, source)
+        source_type = raw_source[0]
+        source_index = raw_source[1]
 
         await Sources(self._projector).set(source_type, source_index)
         self._current_source = source
@@ -197,18 +198,27 @@ class PJLink2MediaPlayer(MediaPlayerEntity):
                 try:
                     current = await Sources(self._projector).get()
                     if isinstance(current, (tuple, list)):
-                        self._current_source = "".join(map(str, current))
+                        raw_source = "".join(map(str, current))
                     else:
-                        self._current_source = str(current)
-                except PJLinkException:
-                    pass  # Keep previous state if temporarily unavailable
+                        raw_source = str(current)
+
+                    # Apply friendly name mapping
+                    self._current_source = self._source_mapping.get(
+                        raw_source, raw_source
+                    )
+
+                except Exception as e:
+                    # THE FIX: If the projector is busy (ERR3), bubble the error up so we force a disconnect
+                    if "ERR3" in repr(e) or "unavailable" in repr(e):
+                        raise e
+                    _LOGGER.debug("Ignored error getting source: %s", repr(e))
 
                 # 2. Fetch Lamp Hours
                 try:
                     self.attrs[ATTR_LAMP_HOURS] = await Lamp(
                         self._projector
                     ).hours()
-                except PJLinkException:
+                except Exception:
                     pass
 
                 # 3. Fetch Resolution
@@ -216,7 +226,7 @@ class PJLink2MediaPlayer(MediaPlayerEntity):
                     res = await Sources(self._projector).resolution()
                     self.attrs[ATTR_RESOLUTION_X] = res[0]
                     self.attrs[ATTR_RESOLUTION_Y] = res[1]
-                except PJLinkException:
+                except Exception:
                     self.attrs.pop(ATTR_RESOLUTION_X, None)
                     self.attrs.pop(ATTR_RESOLUTION_Y, None)
 
@@ -227,11 +237,22 @@ class PJLink2MediaPlayer(MediaPlayerEntity):
 
             self._connectionErrorLogged = False
 
-        except (PJLinkException, OSError) as err:
+        except Exception as err:
             err_str = repr(err)
-            # If the projector is just busy switching inputs/states, ignore and wait for next poll
+
+            # THE FIX: Forcefully drop the connection on any error.
+            # This prevents the projector from getting "stuck" on a stale socket.
+            if self._available:
+                self._available = False
+                try:
+                    await self._projector.__aexit__(0, 0, 0)
+                except Exception:
+                    pass
+
             if "ERR3" in err_str or "unavailable" in err_str:
-                pass
+                _LOGGER.debug(
+                    "Projector is busy switching inputs. Reconnecting next poll."
+                )
             else:
                 if not self._connectionErrorLogged:
                     _LOGGER.error(
@@ -239,9 +260,3 @@ class PJLink2MediaPlayer(MediaPlayerEntity):
                     )
                     self._connectionErrorLogged = True
                 self._state = MediaPlayerState.OFF
-                if self._available:
-                    self._available = False
-                    try:
-                        await self._projector.__aexit__(0, 0, 0)
-                    except Exception:
-                        pass
