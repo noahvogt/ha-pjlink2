@@ -34,6 +34,7 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant as HomeAssistantType
 
 import homeassistant.helpers.config_validation as cv
+from homeassistant.helpers import entity_platform
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 
 import voluptuous as vol
@@ -51,6 +52,8 @@ from .const import (
     ATTR_RESOLUTION_X,
     ATTR_RESOLUTION_Y,
     ATTR_LAMP_HOURS,
+    ATTR_AV_MUTE,
+    ATTR_FREEZE,
     ProjectorState,
 )
 
@@ -86,6 +89,15 @@ async def async_setup_platform(
     devices = [PJLink2MediaPlayer(pjl, name, sources)]
     async_add_entities(devices, update_before_add=False)
 
+    platform = entity_platform.async_get_current_platform()
+    platform.async_register_entity_service(
+        "freeze",
+        {
+            vol.Required("freeze"): cv.boolean,
+        },
+        "async_freeze",
+    )
+
 
 class PJLink2MediaPlayer(MediaPlayerEntity):
 
@@ -93,6 +105,7 @@ class PJLink2MediaPlayer(MediaPlayerEntity):
         MediaPlayerEntityFeature.TURN_ON
         | MediaPlayerEntityFeature.TURN_OFF
         | MediaPlayerEntityFeature.SELECT_SOURCE
+        | MediaPlayerEntityFeature.MUTE_VOLUME
     )
 
     def __init__(self, pjl, name, sources):
@@ -157,6 +170,18 @@ class PJLink2MediaPlayer(MediaPlayerEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         return self.attrs
+
+    @property
+    def is_volume_muted(self) -> bool | None:
+        return self.attrs.get(ATTR_AV_MUTE)
+
+    async def async_mute_volume(self, mute: bool) -> None:
+        await self._projector.mute.both(mute)
+        self.attrs[ATTR_AV_MUTE] = mute
+
+    async def async_freeze(self, freeze: bool) -> None:
+        await self._projector.freeze.set(freeze)
+        self.attrs[ATTR_FREEZE] = freeze
 
     async def async_turn_on(self) -> None:
         await Power(self._projector).set(Power.ON)
@@ -240,9 +265,23 @@ class PJLink2MediaPlayer(MediaPlayerEntity):
                     self.attrs.pop(ATTR_RESOLUTION_X, None)
                     self.attrs.pop(ATTR_RESOLUTION_Y, None)
 
+                try:
+                    mute_status = await self._projector.mute.status()
+                    # status() returns (video_muted, audio_muted)
+                    self.attrs[ATTR_AV_MUTE] = mute_status[0] or mute_status[1]
+                except Exception:
+                    pass
+
+                try:
+                    self.attrs[ATTR_FREEZE] = await self._projector.freeze.get()
+                except Exception:
+                    pass
+
             elif pwr == Power.State.OFF:
                 self.attrs.pop(ATTR_RESOLUTION_X, None)
                 self.attrs.pop(ATTR_RESOLUTION_Y, None)
+                self.attrs.pop(ATTR_AV_MUTE, None)
+                self.attrs.pop(ATTR_FREEZE, None)
                 self._current_source = None
 
             self._connectionErrorLogged = False

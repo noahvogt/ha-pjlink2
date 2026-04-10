@@ -1,0 +1,14 @@
+freeze:
+  name: Freeze
+  description: Freeze the current image on the projector.
+  target:
+    entity:
+      integration: pjlink2
+      domain: media_player
+  fields:
+    freeze:
+      name: Freeze
+      description: True to freeze, False to unfreeze.
+      required: true
+      selector:
+        boolean:

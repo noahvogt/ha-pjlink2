@@ -1,4 +1,5 @@
 """Provides the constants needed for component."""
+
 from enum import StrEnum
 
 DOMAIN = "pjlink2"
@@ -15,9 +16,13 @@ ATTR_PROJECTOR_NAME = "projector_name"
 ATTR_RESOLUTION_X = "x_resolution"
 ATTR_RESOLUTION_Y = "y_resolution"
 ATTR_LAMP_HOURS = "lamp_hours"
+ATTR_AV_MUTE = "av_mute"
+ATTR_FREEZE = "freeze"
+
 
 class ProjectorState(StrEnum):
     OFF = "off"
     ON = "on"
     COOLING = "cooling"
     WARMING = "warming"
+

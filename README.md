@@ -44,9 +44,18 @@ media_player:
     encoding: "utf-16"        # encoding for communication (optional, default is utf-8)
     password: "secret%123"    # password to establish connection (optional)
     timeout: 1.5              # timeout to establish connection in seconds (optional, default is 4 sec)
-    sources:
+    sources:                  # mapping of the raw source to appriorate names
       "31": "Smart TV"
       "32": "Camera HDMI Out"
       "11": "Laptop"
 ```
 If you omit the sources block, the integration will show raw codes like 31, 32, etc., and add new ones to the dropdown as you switch to them on the device.
+
+
+## Roadmap
+
+Possible changes in future releases:
+
+- if the sources yaml block was omitted, give the user all options the projector reports support for
+- add the option to only poll for a subset of data
+- support the full pjlink2 spec
